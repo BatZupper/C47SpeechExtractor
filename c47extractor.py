@@ -90,7 +90,7 @@ def extract_wavs(input_filename, names_file):
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         # Corrected usage to require both files
-        print("Usage: python c47extractor.py language.bin language.idx")
+        print("Usage: python c47extractor.py *.bin *.idx")
         print("Please provide the binary file and the names list file.")
     else:
         bin_file = sys.argv[1].strip()
