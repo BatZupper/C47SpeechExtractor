@@ -87,12 +87,32 @@ def extract_wavs(input_filename, names_file):
 
     print(f"\nTotal WAV files extracted: {count}")
 
+def make_bin(bin_filename, wavs_path):
+    # Open the output .bin file in write-binary mode
+    with open(bin_filename, 'wb') as bin_file:
+        # List all .wav files in the given directory
+        for filename in sorted(os.listdir(wavs_path)):
+            if filename.lower().endswith('.wav'):
+                wav_path = os.path.join(wavs_path, filename)
+                # Read the WAV file as raw bytes
+                with open(wav_path, 'rb') as wav_file:
+                    data = wav_file.read()
+                    # Write the bytes directly into the .bin file
+                    bin_file.write(data)
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        # Corrected usage to require both files
-        print("Usage: python c47extractor.py *.bin *.idx")
-        print("Please provide the binary file and the names list file.")
-    else:
-        bin_file = sys.argv[1].strip()
-        names_file = sys.argv[2].strip()
+        print("Usage:")
+        print("  Extract WAVs: python c47extractor.py -e input.bin names.idx")
+        print("  Make BIN:     python c47extractor.py -m output.bin wavs_folder/")
+
+    # Extract audio
+    elif sys.argv[1] == "-e":
+        bin_file = sys.argv[2].strip()
+        names_file = sys.argv[3].strip()
         extract_wavs(bin_file, names_file)
+    # Remake .bin file
+    elif sys.argv[1] == "-m":
+        bin_file = sys.argv[2].strip()
+        wavs_folder = sys.argv[3].strip()
+        make_bin(bin_file, wavs_folder)
