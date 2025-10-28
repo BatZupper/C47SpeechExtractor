@@ -1,36 +1,30 @@
 import os
 import re
 import sys
+import time
+from datetime import datetime
 
 def extract_wavs(input_filename, names_file):
     """
     Searches a binary file for RIFF/WAVE headers and extracts the chunks 
     as separate .wav files, naming them according to a provided list.
-
-    Args:
-        input_filename (str): Path to the binary file containing WAV data.
-        names_file (str): Path to the file containing a list of desired WAV names.
     """
     try:
-        # Read the entire binary file content
         with open(input_filename, 'rb') as f:
             data = f.read()
     except FileNotFoundError:
         print(f"Error: Input file not found: {input_filename}")
         return
 
-    # Search for WAV header: RIFF + 4 bytes size + WAVE signature
     riff_header = b'RIFF'
     wave_signature = b'WAVE'
 
     indices = []
     i = 0
-    # Loop through the data to find all occurrences of the RIFF header
     while True:
         i = data.find(riff_header, i)
         if i == -1:
             break
-        # Check for the 'WAVE' signature 4 bytes after the size field (i + 8)
         if data[i+8:i+12] == wave_signature:
             indices.append(i)
         i += 1
@@ -39,10 +33,8 @@ def extract_wavs(input_filename, names_file):
         print("Error: No WAV headers found.")
         return
 
-    # Add the end of the file as the last index for chunk slicing
     indices.append(len(data))
 
-    # Read the list of names from the file (line by line)
     try:
         with open(names_file, 'r', encoding='utf-8', errors='ignore') as nf:
             lines = nf.readlines()
@@ -50,19 +42,14 @@ def extract_wavs(input_filename, names_file):
         print(f"Error: Names file not found: {names_file}")
         return
 
-    # Extract .wav file names using regex
-    # Searches for a string ending in .wav (allowing alphanumeric, underscore, and hyphen)
     wav_names = [re.search(r'([A-Za-z0-9_\-]+\.wav)', line) for line in lines]
     wav_names = [m.group(1) for m in wav_names if m]
 
-    # Create the output directory
     output_dir = "extracted"
     os.makedirs(output_dir, exist_ok=True)
 
-    # Determine the number of files to extract (limited by the smallest list)
     count = min(len(indices) - 1, len(wav_names))
 
-    # Iterate and extract the WAV chunks
     for n in range(count):
         start = indices[n]
         end = indices[n + 1]
@@ -74,7 +61,6 @@ def extract_wavs(input_filename, names_file):
 
         print(f"Extracted: {output_filename} ({len(chunk)} bytes)")
 
-    # Handle count mismatch warnings
     total_wav_chunks = len(indices) - 1
     total_names = len(wav_names)
 
@@ -87,32 +73,68 @@ def extract_wavs(input_filename, names_file):
 
     print(f"\nTotal WAV files extracted: {count}")
 
-def make_bin(bin_filename, wavs_path):
-    # Open the output .bin file in write-binary mode
+def make_names_file(wavs_path, names_file):
+    """
+    Generates a file list with permissions, user, size, date, and name
+    formatted like a Unix-style `ls -l` output.
+    """
+    user = os.getenv("USER", "zope")  # default to 'zope' if not found
+    with open(names_file, "w", encoding="utf-8") as f:
+        for filename in sorted(os.listdir(wavs_path)):
+            if not filename.lower().endswith(".wav"):
+                continue
+
+            path = os.path.join(wavs_path, filename)
+            stats = os.stat(path)
+            size = stats.st_size
+
+            # Formatta la data in stile "Oct 17 15:01"
+            t = time.localtime(stats.st_mtime)
+            date_str = time.strftime("%b %d %H:%M", t)
+
+            # Scrivi la riga tipo ls -l
+            f.write(f"-rw-rw-r--   1 {user:<10} {size:8d} {date_str} {filename}\n")
+
+    print(f"Generated names file: {names_file}")
+
+def make_bin(bin_filename, wavs_path, names_file):
+    """
+    Combines all WAV files from a folder into a single .bin file.
+    """
     with open(bin_filename, 'wb') as bin_file:
-        # List all .wav files in the given directory
         for filename in sorted(os.listdir(wavs_path)):
             if filename.lower().endswith('.wav'):
                 wav_path = os.path.join(wavs_path, filename)
-                # Read the WAV file as raw bytes
                 with open(wav_path, 'rb') as wav_file:
                     data = wav_file.read()
-                    # Write the bytes directly into the .bin file
                     bin_file.write(data)
+    print(f"Created BIN file: {bin_filename}")
+
+    # Automatically regenerate names file
+    make_names_file(wavs_path, names_file)
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("Usage:")
         print("  Extract WAVs: python c47extractor.py -e input.bin names.idx")
-        print("  Make BIN:     python c47extractor.py -m output.bin wavs_folder/")
+        print("  Make BIN:     python c47extractor.py -m output.bin wavs_folder/ names.idx")
+        print("  Make Names:   python c47extractor.py -n wavs_folder/ names.idx")
+        sys.exit(0)
 
-    # Extract audio
-    elif sys.argv[1] == "-e":
+    cmd = sys.argv[1]
+
+    if cmd == "-e":
         bin_file = sys.argv[2].strip()
         names_file = sys.argv[3].strip()
         extract_wavs(bin_file, names_file)
-    # Remake .bin file
-    elif sys.argv[1] == "-m":
+
+    elif cmd == "-m":
         bin_file = sys.argv[2].strip()
         wavs_folder = sys.argv[3].strip()
-        make_bin(bin_file, wavs_folder)
+        names_file = sys.argv[4].strip()
+        make_bin(bin_file, wavs_folder, names_file)
+
+    elif cmd == "-n":
+        wavs_folder = sys.argv[2].strip()
+        names_file = sys.argv[3].strip()
+        make_names_file(wavs_folder, names_file)
